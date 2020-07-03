@@ -57,12 +57,30 @@ const compileAll = (htmlString) => {
     var game_info = getGameData(htmlString)
     const otherInfo = game_info.otherInfo.split('\n')
     const justOurFilter = otherInfo.filter(i => i.includes('Roof') || i.includes('Surface') || i.includes('Weather'))
-    game_info['otherInfo'] = justOurFilter
-    console.log(game_info)
+    for (let i of justOurFilter){
+        if(i.includes('Roof')){
+            game_info['roof'] = i.split(',')[1]
+        }
+        if(i.includes('Surface')){
+            game_info['surface'] = i.split(',')[1]
+        }
+        if(i.includes('Weather')){
+            game_info['weather'] = i.split(',')[1]
+        }
+    }
+
+    //form csv
+    const headers = "Home,Away,Date,Time,Weather,Roof,Surface"
+    var values  = ""
+
+    values+= `${game_info.home},${game_info.away},${game_info.date},${game_info.time},${game_info.weather ? game_info.weather : 'na'},${game_info.roof ? game_info.roof : 'na'},${game_info.surface ? game_info.surface : ''}`
+
+    var allValues = `${headers}\n${values}\n${passing_stats}`
+    
+    return allValues.replace(/"/g,"")
 }
 axios.get(url).then(res => {
-    compileAll(res.data)
-    fs.writeFile('201909080crd.csv', getTables(res.data), (err) => {
+    fs.writeFile('201909080crd.csv', compilteAll(res.data), (err) => {
         if (err) throw err;
         console.log('Success')
     })
