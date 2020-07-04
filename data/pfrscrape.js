@@ -3,8 +3,9 @@ const cheerio = require('cheerio')
 const tableToCsv = require('node-table-to-csv')
 var fs = require('fs')
 
-const url = `https://aws.pro-football-reference.com/boxscores/201909080crd.htm`
-// load payload into cheerio
+const urlOfGame = '201909080crd'
+
+const url = `https://aws.pro-football-reference.com/boxscores/${urlOfGame}.htm`
 
 
 const getGameData = (htmlString) => {
@@ -20,6 +21,7 @@ const getGameData = (htmlString) => {
     const awayTeam = $(team[1]).text()
     
     const date = $(scorebox).find('.scorebox_meta > div:nth-child(1)').text()
+    const noCommaDate = date.replace(',', '')
     const fulltime = $(scorebox).find('.scorebox_meta > div:nth-child(2)').text()
     const time = fulltime.replace('Start Time: ', '')
 
@@ -31,7 +33,7 @@ const getGameData = (htmlString) => {
     const csvData = tableToCsv(myTable.parent().html())
 
     return {
-        "date" : date,
+        "date" : noCommaDate,
         "time" : time,
         "home": homeTeam,
         "away" : awayTeam,
@@ -52,7 +54,7 @@ const getTables = (html) => {
     return csvData
 }
 
-const compileAll = (htmlString) => {
+const compileAll = (htmlString, type) => {
     const passing_stats = getTables(htmlString)
     var game_info = getGameData(htmlString)
     const otherInfo = game_info.otherInfo.split('\n')
@@ -75,14 +77,33 @@ const compileAll = (htmlString) => {
 
     values+= `${game_info.home},${game_info.away},${game_info.date},${game_info.time},${game_info.weather ? game_info.weather : 'na'},${game_info.roof ? game_info.roof : 'na'},${game_info.surface ? game_info.surface : ''}`
 
-    var allValues = `${headers}\n${values}\n${passing_stats}`
+    var passingValues = `${passing_stats}`
+    var wholePassing = passingValues.split('\n')
     
-    return allValues.replace(/"/g,"")
+    var newArray = []
+    //var removeSecondHeader = wholePassing.splice(2, 1)
+    var gameInfoValues = `${headers}\n${values}`
+    //add Date to Stat CSV
+    newArray.push(wholePassing[0]+= ',GameDateID')
+    newArray.push(wholePassing[1]+= `,${game_info.date}-${game_info.away}`)
+    newArray.push(wholePassing[3]+= `${game_info.date}-${game_info.home}`)
+    var passingCsv = newArray.join("\n")
+    if(type == 'passing'){
+       //console.log(newArray)
+       return passingCsv.replace(/"/g,"")
+    } else if(type == 'info'){
+        return gameInfoValues.replace(/"/g,"")
+    }
+    
 }
 axios.get(url).then(res => {
-    fs.writeFile('201909080crd.csv', compilteAll(res.data), (err) => {
+    fs.writeFile(`data/${urlOfGame}_passing.csv`, compileAll(res.data, 'passing'), (err) => {
         if (err) throw err;
-        console.log('Success')
+        console.log('Success - Wrote Game\'s Passing Stats')
+    })
+    fs.writeFile(`data/${urlOfGame}_gameInfo.csv`, compileAll(res.data, 'info'), (err) => {
+        if (err) throw err;
+        console.log('Success - Wrote Game Info')
     })
 }).catch(err => {
     console.log(err)
