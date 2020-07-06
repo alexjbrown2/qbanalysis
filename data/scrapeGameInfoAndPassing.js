@@ -3,9 +3,9 @@ const cheerio = require('cheerio')
 const tableToCsv = require('node-table-to-csv')
 var fs = require('fs')
 
-const urlOfGame = '201909080crd'
+// const urlOfGame = '201909080crd'
 
-const url = `https://aws.pro-football-reference.com/boxscores/${urlOfGame}.htm`
+// const url = `https://aws.pro-football-reference.com/boxscores/${urlOfGame}.htm`
 
 
 const getGameData = (htmlString) => {
@@ -96,15 +96,32 @@ const compileAll = (htmlString, type) => {
     }
     
 }
-axios.get(url).then(res => {
-    fs.writeFile(`data/${urlOfGame}_passing.csv`, compileAll(res.data, 'passing'), (err) => {
-        if (err) throw err;
-        console.log('Success - Wrote Game\'s Passing Stats')
+const writeFiles = (url, urlOfGame) => {
+    axios.get(url).then(res => {
+        fs.writeFile(`data/${urlOfGame}_passing.csv`, compileAll(res.data, 'passing'), (err) => {
+            if (err) throw err;
+            console.log('Success - Wrote Game\'s Passing Stats')
+        })
+        fs.writeFile(`data/${urlOfGame}_gameInfo.csv`, compileAll(res.data, 'info'), (err) => {
+            if (err) throw err;
+            console.log('Success - Wrote Game Info')
+        })
+    }).catch(err => {
+        console.log(err)
     })
-    fs.writeFile(`data/${urlOfGame}_gameInfo.csv`, compileAll(res.data, 'info'), (err) => {
-        if (err) throw err;
-        console.log('Success - Wrote Game Info')
-    })
-}).catch(err => {
-    console.log(err)
-})
+}
+const loopWeekURLs = (txtFile) => {
+    const buffer = fs.readFileSync(txtFile, 'utf8').split('\n')
+    const urlArray = buffer[0].split(',')
+    
+    for( let indivUrl of urlArray){
+        const url = `https://aws.pro-football-reference.com${indivUrl}`
+        const removeHTM = indivUrl.replace('.htm', '')
+        const removeBox = removeHTM.replace('/boxscores', '')
+        //console.log(removeHTM)
+        writeFiles(url, removeBox)
+    }
+}
+loopWeekURLs('data/week1_2019_gameurls.txt')
+
+     
