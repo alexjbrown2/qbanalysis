@@ -31,7 +31,6 @@ const getGameData = (htmlString) => {
 
     const myTable = $(uncomment2).find("#game_info")
     const csvData = tableToCsv(myTable.parent().html())
-
     return {
         "date" : noCommaDate,
         "time" : time,
@@ -48,6 +47,7 @@ const getTables = (html) => {
     const uncomment2 = uncomment.replace('-->', '')
 
     //grab my table
+    //Note: Had to modify the node-table-to-csv package to prevent empty strings in the csv
     const myTable = $(uncomment2).find("#passing_advanced")
     const csvData = tableToCsv(myTable.parent().html())
 
@@ -67,7 +67,8 @@ const compileAll = (htmlString, type) => {
             game_info['surface'] = i.split(',')[1]
         }
         if(i.includes('Weather')){
-            game_info['weather'] = i.split(',')[1]
+            const fullWeather = i.split(',')
+            game_info['weather'] = `${fullWeather[1] ? fullWeather[1] : 'n'} ${fullWeather[2] ? fullWeather[2] : 'n'} ${fullWeather[3] ? fullWeather[3] : 'n'}`
         }
     }
 
@@ -84,12 +85,18 @@ const compileAll = (htmlString, type) => {
     //var removeSecondHeader = wholePassing.splice(2, 1)
     var gameInfoValues = `${headers}\n${values}`
     //add Date to Stat CSV
+    //DONE: Need to account for multiple qbs per team
     newArray.push(wholePassing[0]+= ',GameDateID')
-    newArray.push(wholePassing[1]+= `,${game_info.date}-${game_info.away}`)
-    newArray.push(wholePassing[3]+= `${game_info.date}-${game_info.home}`)
+    for(let qbLine of wholePassing){
+        if(!qbLine.startsWith('Player')){          
+            newArray.push(qbLine+= `,${game_info.date}-${game_info.away}`)
+        }
+            
+    }
+    //An empty array value is tagging along - needs to be popped
+    newArray.pop()
     var passingCsv = newArray.join("\n")
     if(type == 'passing'){
-       //console.log(newArray)
        return passingCsv.replace(/"/g,"")
     } else if(type == 'info'){
         return gameInfoValues.replace(/"/g,"")
@@ -98,19 +105,19 @@ const compileAll = (htmlString, type) => {
 }
 const writeFiles = (url, urlOfGame) => {
     axios.get(url).then(res => {
-        fs.writeFile(`data/${urlOfGame}_passing.csv`, compileAll(res.data, 'passing'), (err) => {
+        fs.writeFile(`data/passing/${urlOfGame}_passing.csv`, compileAll(res.data, 'passing'), (err) => {
             if (err) throw err;
-            console.log('Success - Wrote Game\'s Passing Stats')
+            console.log(`Success - Wrote Game\'s ${urlOfGame} Passing Stats`)
         })
-        fs.writeFile(`data/${urlOfGame}_gameInfo.csv`, compileAll(res.data, 'info'), (err) => {
+        fs.writeFile(`data/game_info/${urlOfGame}_gameInfo.csv`, compileAll(res.data, 'info'), (err) => {
             if (err) throw err;
-            console.log('Success - Wrote Game Info')
+            console.log(`Success - Wrote ${urlOfGame} Game Info`)
         })
     }).catch(err => {
         console.log(err)
     })
 }
-const loopWeekURLs = (txtFile) => {
+const loopThroughWeekURLs = (txtFile) => {
     const buffer = fs.readFileSync(txtFile, 'utf8').split('\n')
     const urlArray = buffer[0].split(',')
     
@@ -118,10 +125,13 @@ const loopWeekURLs = (txtFile) => {
         const url = `https://aws.pro-football-reference.com${indivUrl}`
         const removeHTM = indivUrl.replace('.htm', '')
         const removeBox = removeHTM.replace('/boxscores', '')
-        //console.log(removeHTM)
         writeFiles(url, removeBox)
     }
 }
-loopWeekURLs('data/week1_2019_gameurls.txt')
+(() => {
+    for(i = 1; i<22; i++){ 
+        loopThroughWeekURLs(`data/week${i}_2019_gameurls.txt`)
+    }
+})()
 
      
