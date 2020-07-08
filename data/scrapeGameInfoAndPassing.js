@@ -2,11 +2,42 @@ const axios = require('axios')
 const cheerio = require('cheerio')
 const tableToCsv = require('node-table-to-csv')
 var fs = require('fs')
+const { isCompositeComponentWithType } = require('react-dom/test-utils')
 
-// const urlOfGame = '201909080crd'
-
-// const url = `https://aws.pro-football-reference.com/boxscores/${urlOfGame}.htm`
-
+const abbrevs = {
+    "PIT": "Pittsburgh Steelers",
+    "NWE": "New England Patriots",
+    "TAM": "Tampa Bay Buccaneers",
+    "CAR": "Carolina Panthers",
+    "PHI": "Philadelphia Eagles",
+    "ATL": "Atlanta Falcons",
+    "SFO": "San Francisco 49ers",
+    "CIN": "Cincinnati Bengals",
+    "CHI": "Chicago Bears",
+    "DEN": "Denver Broncos",
+    "LAC": "Los Angeles Chargers",
+    "DET": "Detroit Lions", 
+    "MIN": "Minnesota Vikings",
+    "GNB": "Green Bay Packers",
+    "JAX": "Jacksonville Jaguars",
+    "HOU": "Houston Texans",
+    "MIA": "Miami Dolphins",
+    "BUF": "Buffalo Bills",
+    "NYG": "New York Giants",
+    "IND": "Indianapolis Colts",
+    "TEN": "Tennessee Titans",
+    "SEA": "Seattle Seahawks",
+    "KAN": "Kansas City Chiefs",
+    "OAK": "Oakland Raiders",
+    "NOR": "New Orleans Saints",
+    "LAR": "Los Angeles Rams",
+    "ARI": "Arizona Cardinals",
+    "BAL": "Baltimore Ravens", 
+    "DAL": "Dallas Cowboys",
+    "WAS": "Washington Redskins",
+    "CLE": "Cleveland Browns",
+    "NYJ": "New York Jets",
+}
 
 const getGameData = (htmlString) => {
     // date, time, week, roof, weather, over/under
@@ -39,6 +70,7 @@ const getGameData = (htmlString) => {
         "otherInfo" : csvData
     }
 }
+
 const getTables = (html) => {
     //replacing commented out piece that was affecting cheerio
     const $ = cheerio.load(html)
@@ -54,7 +86,51 @@ const getTables = (html) => {
     return csvData
 }
 
-const compileAll = (htmlString, type) => {
+const compileJustGameInfo = (htmlString) => {
+    const passing_stats = getTables(htmlString)
+    var game_info = getGameData(htmlString)
+    const otherInfo = game_info.otherInfo.split('\n')
+    const justOurFilter = otherInfo.filter(i => i.includes('Roof') || i.includes('Surface') || i.includes('Weather'))
+    for (let i of justOurFilter){
+        if(i.includes('Roof')){
+            game_info['roof'] = i.split(',')[1]
+        }
+        if(i.includes('Surface')){
+            game_info['surface'] = i.split(',')[1]
+        }
+        if(i.includes('Weather')){
+            const fullWeather = i.split(',')
+            game_info['weather'] = `${fullWeather[1] ? fullWeather[1] : 'n'} ${fullWeather[2] ? fullWeather[2] : 'n'} ${fullWeather[3] ? fullWeather[3] : 'n'}`
+        }
+    }
+
+    //form csv
+    const headers = "Home,Away,Date,Time,Weather,Roof,Surface"
+    var values  = ""
+
+    values+= `${game_info.home},${game_info.away},${game_info.date},${game_info.time},${game_info.weather ? game_info.weather : 'na'},${game_info.roof ? game_info.roof : 'na'},${game_info.surface ? game_info.surface : ''}`
+
+    var passingValues = `${passing_stats}`
+    var wholePassing = passingValues.split('\n')
+    
+    var newArray = []
+    //var removeSecondHeader = wholePassing.splice(2, 1)
+    var gameInfoValues = `${values}\n`
+    //add Date to Stat CSV
+    //DONE: Need to account for multiple qbs per team
+    newArray.push(wholePassing[0]+= ',GameDateID')
+    for(let qbLine of wholePassing){
+        if(!qbLine.startsWith('Player')){          
+            newArray.push(qbLine+= `,${game_info.date}-${game_info.away}`)
+        }
+            
+    }
+    //An empty array value is tagging along - needs to be popped
+    newArray.pop()
+    var passingCsv = newArray.join("\n")
+    return gameInfoValues.replace(/"/g,"")
+}
+const compileAll = (htmlString, type, justData = null) => {
     const passing_stats = getTables(htmlString)
     var game_info = getGameData(htmlString)
     const otherInfo = game_info.otherInfo.split('\n')
@@ -101,18 +177,22 @@ const compileAll = (htmlString, type) => {
     } else if(type == 'info'){
         return gameInfoValues.replace(/"/g,"")
     }
-    
 }
 const writeFiles = (url, urlOfGame) => {
     axios.get(url).then(res => {
-        fs.writeFile(`data/passing/${urlOfGame}_passing.csv`, compileAll(res.data, 'passing'), (err) => {
+        fs.appendFile(`data/game_info/2019_game_info.csv`, compileJustGameInfo(res.data,'info'), (err) => {
+            if (err) throw err;
+            console.log(`Success - Wrote All 2019 Game Info`)
+        })
+        /*fs.writeFile(`data/passing/${urlOfGame}_passing.csv`, compileAll(res.data, 'passing'), (err) => {
             if (err) throw err;
             console.log(`Success - Wrote Game\'s ${urlOfGame} Passing Stats`)
         })
+        
         fs.writeFile(`data/game_info/${urlOfGame}_gameInfo.csv`, compileAll(res.data, 'info'), (err) => {
             if (err) throw err;
             console.log(`Success - Wrote ${urlOfGame} Game Info`)
-        })
+        })*/
     }).catch(err => {
         console.log(err)
     })
